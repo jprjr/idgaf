@@ -1,0 +1,66 @@
+#!/bin/bash
+set -e
+set -x
+
+MUSL_CROSS_MAKE_RELEASE=1
+MUSL_CROSS_MAKE_SRC="https://github.com/jprjr/musl-cross-make-static/releases/download/${MUSL_CROSS_MAKE_RELEASE}"
+
+declare -A versions
+declare -A targets
+targets[i486-linux-musl]=x86
+targets[x86_64-linux-musl]=amd64
+targets[arm-linux-musleabihf]=armhf
+targets[aarch64-linux-musl]=aarch64
+
+mkdir -p aux
+
+(
+cd aux
+
+# download manifests
+if [[ -e "musl-cross-manifest.txt" ]]; then
+    cp -a musl-cross-manifest.txt manifest.txt
+fi
+wget -nv "${MUSL_CROSS_MAKE_SRC}/manifest.txt"
+cp -a manifest.txt musl-cross-manifest.txt
+rm manifest.txt
+
+)
+
+while read -r line; do
+    key=$(echo "${line}" | cut -d"=" -f1)
+    value=$(echo "${line}" | cut -d"=" -f2)
+    case "${key}" in
+        musl|gcc) versions[$key]=$value ;;
+    esac
+done < aux/musl-cross-manifest.txt
+
+(
+cd aux
+
+# download gcc
+for target in "${!targets[@]}"; do
+    mkdir -p gcc-${target}
+
+    wget -N "${MUSL_CROSS_MAKE_SRC}/gcc-${versions[gcc]}-${target}.tar.gz"
+    tar xf "gcc-${versions[gcc]}-${target}.tar.gz" -C "gcc-${target}"
+done
+)
+
+mkdir -p dist
+
+# build
+for target in "${!targets[@]}"; do
+    rm -rf dist/${target}
+    rm -f dist/idgaf-${target}.tar.gz
+    mkdir -p dist/${target}/bin
+    ./aux/gcc-${target}/bin/${target}-gcc -static -Wall -Wextra -Werror -O3 -o dist/${target}/bin/idgaf idgaf.c
+    ./aux/gcc-${target}/bin/${target}-strip --strip-all dist/${target}/bin/idgaf
+
+    tar czf dist/idgaf-${target}.tar.gz -C dist/${target} .
+done
+
+releasemsg=""
+releasemsg+="Built using \`musl-${versions[musl]}\`\n"
+
+echo -e ${releasemsg} > dist/release.md
