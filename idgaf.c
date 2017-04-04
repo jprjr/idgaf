@@ -57,7 +57,6 @@ int main(int argc, char* argv[]) {
                 *q = 0; /* replace t's colon with null */
             }
 
-            printf("t = %s\n",t);
             if(strlen(t)) {
                 strcat(t,"/");
             }
@@ -66,7 +65,6 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             strcat(t,argv[0]);
-            printf("Trying %s\n",t);
             execve(t,argv,environ);
             if(errno != ENOENT) {
                 return 1;
